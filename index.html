@@ -11,10 +11,17 @@
             padding: 2em;
             background-color: #f6f8fa;
             color: #24292e;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+        }
+        .nav-link {
+            display: block;
+            text-align: center;
+            margin-bottom: 2em;
+            font-size: 1em;
+            color: #0366d6;
+            text-decoration: none;
+        }
+        .nav-link:hover {
+            text-decoration: underline;
         }
         .container {
             background-color: #fff;
@@ -22,6 +29,7 @@
             border-radius: 8px;
             padding: 2em 3em;
             max-width: 600px;
+            margin: auto;
             text-align: center;
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
@@ -53,6 +61,7 @@
     </style>
 </head>
 <body>
+    <a href="https://nitad54448.github.io/" class="nav-link">&larr; Back to Main Portfolio</a>
     <div class="container">
         <h1>CVD Control</h1>
         <p>A LabVIEW application for controlling a Chemical Vapor Deposition (CVD) system, enabling the automation of gas flow, temperature, and pressure for thin film deposition.</p>
