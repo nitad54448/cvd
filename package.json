@@ -1,25 +1,8 @@
 {
-  "name": "hall",
+  "name": "cvd",
   "version": "1.0.0",
-  "description": "A simple web-based calculator for estimating Hall effect parameters (single band, classical system). This tool allows for the interactive exploration of the relationships between experimental setup variables (like current, magnetic field, and sample thickness) and carrier density. Only the magnitude is considered, the sign of carriers is ignored.",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/nitad54448/Hall.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/nitad54448/Hall/issues"
-  },
-  "homepage": "https://github.com/nitad54448/Hall#readme",
-  "devDependencies": {
-    "tailwindcss": "^3.4.17"
-  },
+  "description": "**v2.1, June 2025**",
+  "main": "tailwind.config.js",
   "dependencies": {
     "ansi-regex": "^6.2.0",
     "ansi-styles": "^6.2.1",
@@ -110,5 +93,22 @@
     "wrap-ansi": "^8.1.0",
     "wrap-ansi-cjs": "^7.0.0",
     "yaml": "^2.8.1"
-  }
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nitad54448/cvd.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nitad54448/cvd/issues"
+  },
+  "homepage": "https://github.com/nitad54448/cvd#readme"
 }
