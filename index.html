@@ -186,7 +186,7 @@
                 const div = document.createElement('div');
                 div.className = 'factor-grid data-row';
                 div.dataset.id = factor.id;
-                div.innerHTML = `<input type="text" value="${factor.name}" data-prop="name" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5"><input type="number" value="${factor.min}" data-prop="min" min="0" step="any" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5"><input type="number" value="${factor.max}" data-prop="max" min="0" step="any" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5">`;
+                div.innerHTML = `<input type="text" id="${factor.id}-name" name="${factor.id}-name" value="${factor.name}" data-prop="name" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5"><input type="number" id="${factor.id}-min" name="${factor.id}-min" value="${factor.min}" data-prop="min" min="0" step="any" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5"><input type="number" id="${factor.id}-max" name="${factor.id}-max" value="${factor.max}" data-prop="max" min="0" step="any" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5">`;
                 factorInputsContainer.appendChild(div)
             });
             const today = new Date();
