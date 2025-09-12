@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CVD Experiment Designer & Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); padding: 1.5rem; }
+        input[type="number"] { -moz-appearance: textfield; appearance: none; }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .alert-modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); align-items: center; justify-content: center; }
+        .alert-modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 400px; border-radius: 0.5rem; text-align: center; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); }
+        .alert-modal-close { background-color: #4285F4; color: white; padding: 10px 20px; border: none; border-radius: 0.25rem; cursor: pointer; margin-top: 1rem; }
+        .font-value { font-family: 'Courier New', Courier, monospace; }
+        .factor-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; align-items: center; margin-bottom: 0.5rem; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto space-y-8">
+        <header class="text-center">
+            <h1 class="text-4xl font-bold text-slate-800">CVD Experiment Designer & Analyzer</h1>
+            <p class="text-lg text-slate-600 mt-2">Design your experiment, enter results, find optima, and visualize response surfaces for your CVD process.</p>
+        </header>
+
+        <div id="main-content" class="space-y-8">
+            <div id="design-section" class="card">
+                <h2 class="text-2xl font-semibold text-slate-700 mb-4">1. Design Your Experiment</h2>
+                <div id="factor-inputs" class="space-y-4">
+                    <div class="factor-grid font-medium text-slate-600 text-sm">
+                        <span>Factor (Unit)</span>
+                        <span>Min</span>
+                        <span>Max</span>
+                    </div>
+                </div>
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                    <div>
+                        <label for="design-type" class="block text-sm font-medium text-slate-700 mb-1">Type of Design</label>
+                        <select id="design-type" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5 w-full">
+                            <option value="factorial">Full Factorial</option>
+                            <option value="box-behnken">Box-Behnken</option>
+                            <option value="central-composite" selected>Central Composite</option>
+                        </select>
+                    </div>
+                     <div id="ccd-type-container">
+                        <label for="ccd-type" class="block text-sm font-medium text-slate-700 mb-1">CCD Type (α)</label>
+                        <select id="ccd-type" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5 w-full">
+                            <option value="face-centered">Face-Centered (α = 1.0)</option>
+                            <option value="rotatable">Rotatable (α calculated)</option>
+                        </select>
+                    </div>
+                    <button id="generate-plan-btn" class="w-full md:w-auto bg-indigo-600 text-white py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center justify-center">
+                        Generate Plan
+                    </button>
+                </div>
+            </div>
+
+            <div id="results-section" class="hidden space-y-8">
+
+                <div class="card">
+                     <h2 class="text-2xl font-semibold text-slate-700 mb-4">2. Measured Optimums & Weighting</h2>
+                    <div id="optimality-sliders" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                         <div><label for="thickness-weight" class="block text-sm font-medium text-slate-700">Thickness Importance: <span id="thickness-weight-label" class="font-bold">50%</span></label><input id="thickness-weight" type="range" min="0" max="100" value="50" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"></div>
+                        <div><label for="yield-weight" class="block text-sm font-medium text-slate-700">Yield Importance: <span id="yield-weight-label" class="font-bold">50%</span></label><input id="yield-weight" type="range" min="0" max="100" value="50" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"></div>
+                    </div>
+                    <div id="optimum-results" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                        <div class="p-4 bg-green-50 border border-green-200 rounded-lg"><h3 class="font-semibold text-green-800">Highest Measured Thickness</h3><p id="best-thickness" class="text-2xl font-bold text-green-600 mt-1">-</p><span class="text-sm text-slate-500" id="best-thickness-exp"></span></div>
+                        <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg"><h3 class="font-semibold text-blue-800">Highest Measured Yield</h3><p id="best-yield" class="text-2xl font-bold text-blue-600 mt-1">-</p><span class="text-sm text-slate-500" id="best-yield-exp"></span></div>
+                        <div class="p-4 bg-purple-50 border border-purple-200 rounded-lg"><h3 class="font-semibold text-purple-800">Best Measured Weighted Score</h3><p id="best-overall" class="text-2xl font-bold text-purple-600 mt-1">-</p><span class="text-sm text-slate-500" id="best-overall-exp"></span></div>
+                    </div>
+                </div>
+
+                <div class="card overflow-x-auto">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-semibold text-slate-700">3. Experiment Data</h2>
+                        <button id="model-data-btn" class="bg-slate-200 text-slate-700 py-1 px-3 border border-transparent rounded-md shadow-sm text-xs font-medium hover:bg-slate-300 focus:outline-none">Fill with Model Data</button>
+                    </div>
+                    <table id="experiments-table" class="w-full text-sm text-left text-slate-500"><thead class="text-xs text-slate-700 uppercase bg-slate-50"></thead><tbody></tbody></table>
+                </div>
+
+                <div id="predicted-optima-card" class="card hidden">
+                    <div class="flex justify-between items-start mb-4">
+                        <h2 class="text-2xl font-semibold text-slate-700">4. Predicted Optimum Conditions</h2>
+                         <div class="flex space-x-4">
+                            <div>
+                                <label for="rw-precision" class="block text-sm font-medium text-slate-700 mb-1">Search Precision</label>
+                                <select id="rw-precision" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5">
+                                    <option value="coarse">Coarse (~1k steps)</option>
+                                    <option value="fine" selected>Fine (~10k steps)</option>
+                                    <option value="extensive">Extensive (~100k steps)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div id="predicted-thickness-display" class="hidden p-4 bg-green-50 border border-green-200 rounded-lg"></div>
+                        <div id="predicted-yield-display" class="hidden p-4 bg-blue-50 border border-blue-200 rounded-lg"></div>
+                    </div>
+                    <div id="predicted-combined-display" class="hidden md:col-span-2 p-4 bg-purple-50 border border-purple-200 rounded-lg"></div>
+                </div>
+
+                <div id="statistics-container" class="hidden space-y-6"></div>
+
+                <div id="plots-card" class="card hidden">
+                    <h2 class="text-2xl font-semibold text-slate-700 mb-4">5. 2D Contour Plots</h2>
+                    <p id="contour-plots-placeholder" class="text-sm text-slate-600 mb-4">Enter enough results for your chosen design to generate models and plots.</p>
+                    <div id="contour-plots-container" class="space-y-12"></div>
+                </div>
+
+                <div id="save-pdf-card" class="card hidden">
+                     <h2 class="text-2xl font-semibold text-slate-700 mb-4">6. Export Report</h2>
+                     <p class="text-sm text-slate-600 mb-4">Save a summary of the measured data, predicted optima, and model statistics as a PDF file for your records.</p>
+                     <button id="save-pdf-btn" class="w-full md:w-auto bg-indigo-600 text-white py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center justify-center">
+                        Save Summary as PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <footer class="max-w-7xl mx-auto mt-12 py-4 border-t text-xs text-slate-500 flex justify-between items-center">
+            <div id="footer-left"></div>
+            <div id="footer-right">NitaD, Univ Paris-Saclay</div>
+        </footer>
+    </div>
+
+    <div id="alert-modal" class="alert-modal"><div class="alert-modal-content"><p id="alert-message"></p><button id="alert-close" class="alert-modal-close">OK</button></div></div>
+
+    <script>
+        // --- DOM Elements ---
+        const designSection = document.getElementById('design-section'),
+            factorInputsContainer = document.getElementById('factor-inputs'),
+            generatePlanBtn = document.getElementById('generate-plan-btn'),
+            designTypeEl = document.getElementById('design-type'),
+            ccdTypeContainer = document.getElementById('ccd-type-container'),
+            ccdTypeEl = document.getElementById('ccd-type'),
+            resultsSection = document.getElementById('results-section'),
+            tableHead = document.querySelector('#experiments-table thead'),
+            tableBody = document.querySelector('#experiments-table tbody'),
+            modelDataBtn = document.getElementById('model-data-btn'),
+            thicknessWeightSlider = document.getElementById('thickness-weight'),
+            yieldWeightSlider = document.getElementById('yield-weight'),
+            thicknessWeightLabel = document.getElementById('thickness-weight-label'),
+            yieldWeightLabel = document.getElementById('yield-weight-label'),
+            bestThicknessEl = document.getElementById('best-thickness'), bestThicknessExpEl = document.getElementById('best-thickness-exp'),
+            bestYieldEl = document.getElementById('best-yield'), bestYieldExpEl = document.getElementById('best-yield-exp'),
+            bestOverallEl = document.getElementById('best-overall'), bestOverallExpEl = document.getElementById('best-overall-exp'),
+            predictedOptimaCard = document.getElementById('predicted-optima-card'),
+            predictedThicknessDisplay = document.getElementById('predicted-thickness-display'),
+            predictedYieldDisplay = document.getElementById('predicted-yield-display'),
+            predictedCombinedDisplay = document.getElementById('predicted-combined-display'),
+            alertModal = document.getElementById('alert-modal'),
+            alertMessage = document.getElementById('alert-message'),
+            alertClose = document.getElementById('alert-close'),
+            plotsCard = document.getElementById('plots-card'),
+            statisticsContainer = document.getElementById('statistics-container'),
+            contourPlotsContainer = document.getElementById('contour-plots-container'),
+            contourPlotsPlaceholder = document.getElementById('contour-plots-placeholder'),
+            savePdfCard = document.getElementById('save-pdf-card'),
+            savePdfBtn = document.getElementById('save-pdf-btn'),
+            rwPrecisionEl = document.getElementById('rw-precision'),
+            footerLeft = document.getElementById('footer-left');
+
+        // --- Global State ---
+        let experimentData = [],
+            definedFactors = [],
+            currentDesignType = '';
+        const responses = ['thickness', 'yield'];
+
+        // --- Initial Setup ---
+        function setupFactorInputs() {
+            // Updated default factors for a CVD process
+            const defaultFactors = [
+                { id: 'concentration', name: 'Precursor Conc. (mol/L)', min: 0.01, max: 0.1 },
+                { id: 'temp', name: 'Furnace Temp (°C)', min: 500, max: 900 },
+                { id: 'ratio', name: 'N2/O2 Flow Ratio', min: 0.5, max: 5 },
+                { id: 'pressure', name: 'Pressure (mbar)', min: 1, max: 20 },
+                { id: 'time', name: 'Deposition Time (min)', min: 15, max: 90 }
+            ];
+            defaultFactors.forEach(factor => {
+                const div = document.createElement('div');
+                div.className = 'factor-grid data-row';
+                div.dataset.id = factor.id;
+                div.innerHTML = `<input type="text" value="${factor.name}" data-prop="name" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5"><input type="number" value="${factor.min}" data-prop="min" min="0" step="any" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5"><input type="number" value="${factor.max}" data-prop="max" min="0" step="any" class="bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2.5">`;
+                factorInputsContainer.appendChild(div)
+            });
+            const today = new Date();
+            const dateString = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            footerLeft.textContent = `cvd_DoE_v2.html, ${dateString}`;
+        }
+
+        // --- Event Listeners ---
+        designTypeEl.addEventListener('change', () => { ccdTypeContainer.style.display = designTypeEl.value === 'central-composite' ? 'block' : 'none' });
+        generatePlanBtn.addEventListener('click', generatePlan);
+        modelDataBtn.addEventListener('click', fillWithModelData);
+        [thicknessWeightSlider, yieldWeightSlider].forEach(slider => slider.addEventListener('input', handleSliderChange));
+        tableBody.addEventListener('input', handleTableInputChange);
+        alertClose.addEventListener('click', () => alertModal.style.display = 'none');
+        savePdfBtn.addEventListener('click', saveAsPDF);
+        rwPrecisionEl.addEventListener('change', updateAdvancedVisualizations);
+
+        // --- Core Functions ---
+        function customAlert(message) {
+            alertMessage.textContent = message;
+            alertModal.style.display = 'flex';
+        }
+
+        function getFactorsFromUI() {
+            const factors = [];
+            document.querySelectorAll('#factor-inputs .data-row').forEach(row => {
+                const name = row.querySelector('[data-prop="name"]').value.trim();
+                const min = parseFloat(row.querySelector('[data-prop="min"]').value);
+                const max = parseFloat(row.querySelector('[data-prop="max"]').value);
+                if(min < 0 || max < 0) {
+                    customAlert(`Factor "${name}" cannot have negative values. Please correct the range.`);
+                    return;
+                }
+                if (name && !isNaN(min) && !isNaN(max)) {
+                    factors.push({ name, unit: '', min, max, isVarying: min !== max });
+                }
+            });
+            if (factors.length !== document.querySelectorAll('#factor-inputs .data-row').length) return [];
+            return factors.filter(f => f.isVarying);
+        }
+
+        function generatePlan() {
+            definedFactors = getFactorsFromUI();
+            if (definedFactors.length === 0 && document.querySelectorAll('#factor-inputs .data-row').length > 0) {
+                 return;
+            }
+            currentDesignType = designTypeEl.value;
+
+            if (definedFactors.length === 0) {
+                customAlert('Please define at least one varying factor (Min ≠ Max).');
+                return;
+            }
+             if (currentDesignType !== 'factorial' && definedFactors.length < 3) {
+                customAlert("Box-Behnken and Central Composite designs require at least 3 varying factors.");
+                return;
+            }
+             if (definedFactors.length < 2 && currentDesignType === 'factorial') {
+                customAlert('Factorial designs work best with at least two varying factors.');
+            }
+
+            let plan;
+            if (currentDesignType === 'factorial') plan = generateFactorial(definedFactors);
+            else if (currentDesignType === 'box-behnken') plan = generateBoxBehnken(definedFactors);
+            else if (currentDesignType === 'central-composite') plan = generateCentralComposite(definedFactors);
+
+            if (!plan) return;
+            initializeData(plan, definedFactors);
+        }
+
+        function initializeData(plan, factors) {
+            experimentData = plan.map((settings, index) => ({
+                id: index + 1,
+                settings,
+                thickness: null,
+                yield: null,
+                score: null,
+                weightedResponse: null
+            }));
+            renderTable(factors);
+            resultsSection.classList.remove('hidden');
+            designSection.classList.add('hidden');
+            analyzeData();
+        }
+
+        function fillWithModelData() {
+            const allUiFactors = {};
+            document.querySelectorAll('#factor-inputs .data-row').forEach(row => {
+                const id = row.dataset.id;
+                if (id) {
+                    allUiFactors[id] = {
+                        name: row.querySelector('[data-prop="name"]').value.trim(),
+                        min: parseFloat(row.querySelector('[data-prop="min"]').value),
+                        max: parseFloat(row.querySelector('[data-prop="max"]').value)
+                    };
+                }
+            });
+
+            const { concentration: concF, temp: tempF, ratio: ratioF, pressure: pressF, time: timeF } = allUiFactors;
+
+            if (!concF || !tempF || !ratioF || !pressF || !timeF) {
+                customAlert("The 'Fill with Model Data' feature requires the original 5 factor inputs to be present. One may have been deleted.");
+                return;
+            }
+
+            experimentData.forEach(exp => {
+                const s = exp.settings;
+                const getValue = (factorObj) => s[factorObj.name] ?? factorObj.min;
+
+                const conc = codeValue(getValue(concF), concF.min, concF.max);
+                const temp = codeValue(getValue(tempF), tempF.min, tempF.max);
+                const ratio = codeValue(getValue(ratioF), ratioF.min, ratioF.max);
+                const pressure = codeValue(getValue(pressF), pressF.min, pressF.max);
+                const time = codeValue(getValue(timeF), timeF.min, timeF.max);
+
+                // Complex, non-linear model for THICKNESS
+                let thicknessModel = 300 + 150*time + 100*temp + 80*conc + 30*time*temp - 20*pressure + 50*conc*time - 80*temp**2 - 90*time**2 - 40*pressure**2;
+
+                // Complex, non-linear model for YIELD, with an optimum
+                let yieldModel = 85 - 25 * Math.abs(ratio - 0.1) - 15 * Math.abs(temp - 0.5) - 10 * pressure**2 - 5 * conc * ratio;
+
+                // Add random noise to make it more realistic
+                exp.thickness = Math.max(10, thicknessModel + (Math.random() - 0.5) * 40);
+                exp.yield = Math.max(5, Math.min(100, yieldModel + (Math.random() - 0.5) * 5));
+
+                const row = tableBody.querySelector(`tr[data-index="${exp.id - 1}"]`);
+                if (row) {
+                    row.querySelector('input[data-metric="thickness"]').value = exp.thickness.toFixed(1);
+                    row.querySelector('input[data-metric="yield"]').value = exp.yield.toFixed(1);
+                }
+            });
+            analyzeData();
+        }
+
+        function renderTable(factors) {
+            tableHead.innerHTML = '';
+            tableBody.innerHTML = '';
+            const headerRow = document.createElement('tr');
+            const factorHeaders = factors.map(f => `<th scope="col" class="px-6 py-3">${f.name}</th>`).join('');
+            headerRow.innerHTML = `<th scope="col" class="px-6 py-3">Exp #</th>${factorHeaders}<th scope="col" class="px-6 py-3">Thickness (nm)</th><th scope="col" class="px-6 py-3">Yield (%)</th><th scope="col" class="px-6 py-3">Weighted Score</th>`;
+            tableHead.appendChild(headerRow);
+
+            experimentData.forEach((exp, index) => {
+                const row = document.createElement('tr');
+                row.className = 'bg-white border-b hover:bg-slate-50';
+                row.dataset.index = index;
+                const settingsHtml = factors.map(f => `<td class="px-6 py-4 font-value"><input type="number" data-metric="setting" data-factor="${f.name}" value="${exp.settings[f.name].toFixed(3)}" class="w-24 bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2 text-center" min="0" step="any"></td>`).join('');
+                row.innerHTML = `<th scope="row" class="px-6 py-4 font-medium text-slate-900 whitespace-nowrap">${exp.id}</th>${settingsHtml}` +
+                    `<td class="px-6 py-4"><input type="number" data-metric="thickness" class="w-24 bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2" min="0" step="any"></td>` +
+                    `<td class="px-6 py-4"><input type="number" data-metric="yield" class="w-24 bg-slate-50 border-slate-300 text-slate-900 text-sm rounded-lg p-2" min="0" max="100" step="any"></td>` +
+                    `<td class="px-6 py-4 font-medium text-slate-600 score-cell">-</td>`;
+                tableBody.appendChild(row)
+            });
+        }
+
+        function handleTableInputChange(e) {
+            if (e.target.matches('input[type="number"]')) {
+                const rowIndex = e.target.closest('tr').dataset.index;
+                const metric = e.target.dataset.metric;
+                let value = e.target.value === '' || e.target.value === null ? null : parseFloat(e.target.value);
+
+                if (value < 0) {
+                    value = 0;
+                    e.target.value = 0;
+                }
+
+                if (rowIndex < experimentData.length) {
+                    if (metric === 'setting') {
+                        experimentData[rowIndex].settings[e.target.dataset.factor] = value;
+                    } else {
+                        experimentData[rowIndex][metric] = value;
+                    }
+                    analyzeData();
+                }
+            }
+        }
+
+        function handleSliderChange(e) {
+            const sliders = [thicknessWeightSlider, yieldWeightSlider];
+            const labels = [thicknessWeightLabel, yieldWeightLabel];
+            let total = 0;
+            sliders.forEach(s => total += parseFloat(s.value));
+            sliders.forEach((s, i) => {
+                const percentage = total === 0 ? 50 : (s.value / total) * 100;
+                labels[i].textContent = `${Math.round(percentage)}%`;
+            });
+            analyzeData();
+        }
+
+        function analyzeData() {
+            if (experimentData.length === 0) return;
+            let bests = {
+                thickness: { value: -1, exp: null },
+                yield: { value: -1, exp: null },
+            };
+            let bestOverall = { value: -1, exp: null };
+            const valueRanges = {};
+            responses.forEach(r => {
+                const values = experimentData.map(e => e[r]).filter(v => v !== null);
+                valueRanges[r] = { min: Math.min(...values), max: Math.max(...values) };
+            });
+            const normalize = (value, response) => {
+                const { min, max } = valueRanges[response];
+                if (max === min || value === null) return 0;
+                return (value - min) / (max - min);
+            };
+            const w_thick = parseFloat(thicknessWeightSlider.value);
+            const w_yield = parseFloat(yieldWeightSlider.value);
+            const w_total = w_thick + w_yield;
+
+            experimentData.forEach((exp, index) => {
+                const has = {
+                    thickness: exp.thickness !== null,
+                    yield: exp.yield !== null,
+                };
+                if (has.thickness && exp.thickness > bests.thickness.value) bests.thickness = { value: exp.thickness, exp: exp };
+                if (has.yield && exp.yield > bests.yield.value) bests.yield = { value: exp.yield, exp: exp };
+                
+                let scoreValue = 0;
+                let weightSum = 0;
+                if (w_total > 0) {
+                     if (has.thickness) { scoreValue += (w_thick / w_total) * normalize(exp.thickness, 'thickness'); weightSum += (w_thick / w_total); }
+                     if (has.yield) { scoreValue += (w_yield / w_total) * normalize(exp.yield, 'yield'); weightSum += (w_yield / w_total); }
+                }
+                exp.score = (weightSum > 0) ? (scoreValue / weightSum) : null;
+                exp.weightedResponse = (has.thickness && has.yield) ? exp.score : null;
+                if (exp.score !== null && exp.score > bestOverall.value) {
+                    bestOverall = { value: exp.score, exp: exp };
+                }
+                const scoreCell = tableBody.querySelector(`tr[data-index="${index}"] .score-cell`);
+                if (scoreCell) scoreCell.textContent = exp.score !== null ? exp.score.toFixed(3) : '-';
+            });
+            displayOptimum(bestThicknessEl, bestThicknessExpEl, bests.thickness, ' nm');
+            displayOptimum(bestYieldEl, bestYieldExpEl, bests.yield, '%');
+            displayOptimum(bestOverallEl, bestOverallExpEl, bestOverall, '', 3);
+            updateAdvancedVisualizations();
+        }
+
+        function displayOptimum(valueEl, expEl, result, unit, precision = 1) {
+            if (result.exp) {
+                valueEl.textContent = `${result.value.toFixed(precision)}${unit}`;
+                expEl.textContent = `(Exp #${result.exp.id})`;
+            } else {
+                valueEl.textContent = '-';
+                expEl.textContent = '';
+            }
+        }
+
+        function updateAdvancedVisualizations() {
+            [predictedOptimaCard, predictedThicknessDisplay, predictedYieldDisplay, predictedCombinedDisplay, statisticsContainer, plotsCard, savePdfCard].forEach(el => el.classList.add('hidden'));
+            statisticsContainer.innerHTML = '';
+            contourPlotsContainer.innerHTML = '';
+            if (!experimentData.some(exp => exp.thickness !== null || exp.yield !== null)) return;
+            const models = {};
+            responses.forEach(r => {
+                models[r] = buildModel(experimentData, definedFactors, r, currentDesignType);
+            });
+            const combinedStatsModel = buildModel(experimentData, definedFactors, 'weightedResponse', currentDesignType);
+            const optima = {};
+            responses.forEach(r => {
+                 optima[r] = models[r] ? findGlobalOptimum(models[r], definedFactors, r) : null;
+            });
+            const combinedOptimum = (models.thickness && models.yield) ? findCombinedOptimum(models.thickness, models.yield, definedFactors) : null;
+            if (Object.values(models).some(m => m !== null)) {
+                predictedOptimaCard.classList.remove('hidden');
+                savePdfCard.classList.remove('hidden');
+                statisticsContainer.classList.remove('hidden');
+            }
+            buildOptimumDisplay(models.thickness, 'thickness', predictedThicknessDisplay, 'green', optima.thickness);
+            buildOptimumDisplay(models.yield, 'yield', predictedYieldDisplay, 'blue', optima.yield);
+            buildCombinedOptimumDisplay(combinedOptimum, predictedCombinedDisplay, models);
+            buildStatisticsDisplay(combinedStatsModel, 'Weighted Score Model');
+            if (Object.values(models).some(m => m !== null) && definedFactors.length >= 2) {
+                plotsCard.classList.remove('hidden');
+                contourPlotsPlaceholder.style.display = 'none';
+                buildContourPlots(definedFactors, models, optima);
+            } else if (definedFactors.length < 2) {
+                 contourPlotsPlaceholder.textContent = "2D plots require at least 2 varying factors.";
+                 plotsCard.classList.remove('hidden');
+                 contourPlotsPlaceholder.style.display = 'block';
+            }
+        }
+
+        function buildCombinedOptimumDisplay(combinedOptimum, displayEl, models) {
+            if (!combinedOptimum) {
+                displayEl.classList.add('hidden');
+                return;
+            }
+            displayEl.classList.remove('hidden');
+            let settingsHtml = '';
+            Object.entries(combinedOptimum.settings).forEach(([key, value]) => settingsHtml += `<li class="list-disc list-inside">${key}: <span class="font-value">${value.toFixed(3)}</span></li>`);
+            const getPIHtml = (model, codedSettings) => {
+                if (!model) return '';
+                const pi = getPredictionInterval(model, codedSettings);
+                return `<span class="text-slate-500 text-xs"> (95% PI: ${pi.lower.toFixed(1)} - ${pi.upper.toFixed(1)})</span>`;
+            };
+            displayEl.innerHTML = `<h3 class="font-semibold text-purple-800 mb-2">Combined Optimum (Predicted)</h3>
+            <p>Weights-based, best compromise:</p>
+            <ul class="mt-1 mb-2">${settingsHtml}</ul>
+            <p>With these parameters, the predicted results are:</p>
+            <div class="mt-1 text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
+                <p><span class="font-semibold text-green-700">Thickness:</span> <strong class="font-value text-green-700">${combinedOptimum.thickness.toFixed(2)} nm</strong>${getPIHtml(models.thickness, combinedOptimum.codedSettings)}</p>
+                <p><span class="font-semibold text-blue-700">Yield:</span> <strong class="font-value text-blue-700">${combinedOptimum.yield.toFixed(2)}%</strong>${getPIHtml(models.yield, combinedOptimum.codedSettings)}</p>
+            </div>`;
+        }
+
+        function buildOptimumDisplay(model, responseName, displayEl, color, optimumResult) {
+            if (!model || !optimumResult) {
+                displayEl.classList.add('hidden');
+                return;
+            }
+            displayEl.classList.remove('hidden');
+            displayEl.innerHTML = '';
+            const { optimum } = optimumResult;
+            let unit = '';
+            if (responseName === 'thickness') unit = ' nm';
+            else if (responseName === 'yield') unit = '%';
+            const h3 = document.createElement('h3');
+            h3.className = `font-semibold text-${color}-800 mb-2`;
+            h3.textContent = `Mathematical Optimum (${responseName.charAt(0).toUpperCase() + responseName.slice(1)})`;
+            const p = document.createElement('p');
+            p.innerHTML = `Max. predicted ${responseName}: <strong class="text-${color}-600 font-value">${optimum.z.toFixed(2)}${unit}</strong> at:`;
+            const paramsUl = document.createElement('ul');
+            paramsUl.className = 'mt-1 text-sm';
+            Object.entries(optimum.settings).forEach(([key, value]) => {
+                const li = document.createElement('li');
+                li.innerHTML = `${key}: <span class="font-value">${value.toFixed(3)}</span>`;
+                li.className = 'list-disc list-inside';
+                paramsUl.appendChild(li);
+            });
+            displayEl.append(h3, p, paramsUl);
+            const measuredValues = experimentData.map(e => e[responseName]).filter(v => v !== null);
+            if (measuredValues.length > 0) {
+                const measuredMax = Math.max(...measuredValues);
+                if (measuredMax > optimum.z) {
+                    const noteP = document.createElement('p');
+                    noteP.className = 'text-xs text-slate-500 mt-2 italic';
+                    noteP.innerHTML = `Note: The highest measured value of <strong class="font-value">${measuredMax.toFixed(2)}${unit}</strong> exceeds this prediction.`;
+                    displayEl.appendChild(noteP);
+                }
+            }
+        }
+
+        function findCombinedOptimum(thicknessModel, yieldModel, varyingFactors) {
+             if (!thicknessModel || !yieldModel) return null;
+             const allValues = {
+                 thickness: experimentData.map(e => e.thickness).filter(v => v !== null),
+                 yield: experimentData.map(e => e.yield).filter(v => v !== null),
+             };
+             const ranges = {};
+             responses.forEach(r => {
+                ranges[r] = {
+                    min: allValues[r].length > 0 ? Math.min(...allValues[r]) : 0,
+                    max: allValues[r].length > 0 ? Math.max(...allValues[r]) : 1,
+                };
+                if(ranges[r].min === ranges[r].max) ranges[r].max += 1;
+             });
+             const normalizePred = (val, response) => (val - ranges[response].min) / (ranges[response].max - ranges[response].min);
+             const w_thick = parseFloat(thicknessWeightSlider.value);
+             const w_yield = parseFloat(yieldWeightSlider.value);
+             const w_total = w_thick + w_yield;
+             if (w_total === 0) return null;
+             const predictCombined = (codedSettings) => {
+                 const predThick = predictFromModel(thicknessModel, codedSettings);
+                 const predYield = predictFromModel(yieldModel, codedSettings);
+                 return (w_thick * normalizePred(predThick, 'thickness') +
+                         w_yield * normalizePred(predYield, 'yield')) / w_total;
+             };
+             const codedBounds = {};
+             varyingFactors.forEach(f => { codedBounds[f.name] = { min: -1, max: 1 } });
+             let bestCoded = findOptimumRandomWalk(predictCombined, codedBounds, varyingFactors);
+             let bestRealSettings = {};
+             varyingFactors.forEach(f => {
+                 if (bestCoded.settings[f.name] !== undefined) {
+                     bestRealSettings[f.name] = uncodeValue(bestCoded.settings[f.name], f.min, f.max);
+                 }
+             });
+
+             const thicknessAtOpt = Math.max(0, predictFromModel(thicknessModel, bestCoded.settings));
+             const yieldAtOpt = Math.max(0, Math.min(100, predictFromModel(yieldModel, bestCoded.settings)));
+
+             return {
+                 settings: bestRealSettings,
+                 codedSettings: bestCoded.settings,
+                 thickness: thicknessAtOpt,
+                 yield: yieldAtOpt,
+             };
+         }
+
+        function buildStatisticsDisplay(model, responseName) {
+            if (!model) return;
+            const card = document.createElement('div');
+            card.className = 'card';
+            const statsOrder = ['Std. Dev.', 'Mean', 'C.V. %', 'PRESS', 'R-Squared', 'Adj R-Squared', 'Pred R-Squared', 'Adeq. Precision'];
+            const fitStatsHtml = statsOrder.map(key => `<tr><td class="py-1 pr-4 font-medium text-slate-600">${key}</td><td class="py-1 text-right font-value">${model.stats[key]?.toFixed(4) ?? '-'}</td></tr>`).join('');
+            card.innerHTML = `<h2 class="text-2xl font-semibold text-slate-700 mb-4">${responseName} Statistics</h2><p class="text-xs text-slate-500 mb-4 -mt-2">Model coefficients are based on coded units [-1, 1].</p><div class="grid grid-cols-1"><div class="overflow-x-auto"><table class="w-full text-sm coefficients-table"><thead><tr class="border-b"><th class="px-2 py-1 text-left">Term</th><th class="px-2 py-1 text-right">Coefficient</th><th class="px-2 py-1 text-right">Std. Error</th><th class="px-2 py-1 text-right">95% CI Lower</th><th class="px-2 py-1 text-right">95% CI Upper</th></tr></thead><tbody>${Object.entries(model.coeffs).map(([term, stats])=>`<tr><td class="border-t px-2 py-1">${term.replace(/\*/g, ' * ')}</td><td class="border-t px-2 py-1 text-right font-value">${stats.value.toFixed(4)}</td><td class="border-t px-2 py-1 text-right font-value">${stats.stdError.toFixed(4)}</td><td class="border-t px-2 py-1 text-right font-value">${stats.ciLower.toFixed(4)}</td><td class="border-t px-2 py-1 text-right font-value">${stats.ciUpper.toFixed(4)}</td></tr>`).join('')}</tbody></table></div><p class="text-xs text-slate-500 mt-2">* Confidence intervals are approximated using a t-value of 1.96.</p></div><div class="border-t pt-4 mt-4"><table class="w-full text-sm fit-statistics-table"><tbody>${fitStatsHtml}</tbody></table></div></div>`;
+            statisticsContainer.appendChild(card);
+        }
+
+        function buildContourPlots(varyingFactors, models, optima) {
+            contourPlotsContainer.innerHTML = '';
+            const factorPairs = [];
+            for (let i = 0; i < varyingFactors.length; i++) for (let j = i + 1; j < varyingFactors.length; j++) factorPairs.push([varyingFactors[i], varyingFactors[j]]);
+            factorPairs.forEach(([factorX, factorY], pairIndex) => {
+                const pairWrapper = document.createElement('div');
+                pairWrapper.className = 'space-y-4 border-t pt-6 mt-6';
+                if(pairIndex === 0) pairWrapper.classList.remove('border-t', 'pt-6', 'mt-6');
+                const title = document.createElement('h3');
+                title.className = "text-xl font-semibold text-center text-slate-700";
+                title.textContent = `${factorX.name} vs ${factorY.name}`;
+                pairWrapper.appendChild(title);
+                const plotsDiv = document.createElement('div');
+                plotsDiv.className = 'grid grid-cols-1 md:grid-cols-2 gap-8';
+                responses.forEach((responseName) => {
+                    const model = models[responseName];
+                    const optimumResult = optima[responseName];
+                    if (model && optimumResult) {
+                        const plotDiv = document.createElement('div');
+                        const canvasId = `contour-${responseName}-${pairIndex}`;
+                        plotDiv.innerHTML = `<h4 class="font-medium text-center text-slate-600 mb-2">${responseName.charAt(0).toUpperCase() + responseName.slice(1)}</h4><canvas id="${canvasId}" class="w-full h-auto"></canvas>`;
+                        plotsDiv.appendChild(plotDiv);
+                        setTimeout(() => draw2DContourPlot(canvasId, model, factorX, factorY, optimumResult), 0);
+                    }
+                });
+                if (plotsDiv.children.length > 0) pairWrapper.appendChild(plotsDiv);
+                contourPlotsContainer.appendChild(pairWrapper);
+            });
+        }
+
+        function draw2DContourPlot(canvasId, model, factorX, factorY, optimumResult) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+
+            // Define expanded canvas dimensions and margins for axes and a color legend
+            const width = 400, height = 350;
+            canvas.width = width;
+            canvas.height = height;
+            const margin = { top: 30, right: 70, bottom: 50, left: 60 };
+            const plotWidth = width - margin.left - margin.right;
+            const plotHeight = height - margin.top - margin.bottom;
+
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = '#f8fafc'; // Match body background
+            ctx.fillRect(0, 0, width, height);
+
+            const otherFactors = definedFactors.filter(f => f.name !== factorX.name && f.name !== factorY.name);
+            const fixedValues = {};
+            otherFactors.forEach(f => {
+                fixedValues[f.name] = (f.min + f.max) / 2; // Fix other factors at their center point
+            });
+
+            const predict = (realSettings) => {
+                let codedSettings = {};
+                definedFactors.forEach(f => {
+                    const valueToCode = realSettings[f.name] ?? (f.min + f.max) / 2;
+                    codedSettings[f.name] = codeValue(valueToCode, f.min, f.max);
+                });
+                return predictFromModel(model, codedSettings);
+            };
+
+            const imageData = ctx.createImageData(plotWidth, plotHeight);
+            let minZ = Infinity, maxZ = -Infinity;
+            const zValues = [];
+
+            // 1. Calculate all Z-values to find the min/max for color scaling
+            for (let j = 0; j < plotHeight; j++) {
+                for (let i = 0; i < plotWidth; i++) {
+                    let currentSettings = { ...fixedValues };
+                    currentSettings[factorX.name] = factorX.min + (i / (plotWidth - 1)) * (factorX.max - factorX.min);
+                    currentSettings[factorY.name] = factorY.min + ((plotHeight - 1 - j) / (plotHeight - 1)) * (factorY.max - factorY.min);
+                    const z = predict(currentSettings);
+                    zValues.push(z);
+                    if (isFinite(z)) {
+                        if (z < minZ) minZ = z;
+                        if (z > maxZ) maxZ = z;
+                    }
+                }
+            }
+
+            // 2. Generate the plot image based on normalized Z-values
+            for (let i = 0; i < zValues.length; i++) {
+                const z = zValues[i];
+                const zRange = maxZ - minZ;
+                const normZ = isFinite(z) ? Math.max(0, Math.min(1, (z - minZ) / (zRange || 1))) : 0;
+                const color = new THREE.Color();
+                color.setHSL((240 - (normZ * 240)) / 360, 0.9, 0.5); // HSL: Blue (low) -> Red (high)
+                const pIdx = i * 4;
+                imageData.data[pIdx] = color.r * 255;
+                imageData.data[pIdx + 1] = color.g * 255;
+                imageData.data[pIdx + 2] = color.b * 255;
+                imageData.data[pIdx + 3] = 255;
+            }
+            ctx.putImageData(imageData, margin.left, margin.top);
+
+            // 3. Draw Axes and Ticks
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.font = '11px Inter';
+            ctx.fillStyle = '#333';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // X-axis
+            ctx.beginPath();
+            ctx.moveTo(margin.left, margin.top + plotHeight);
+            ctx.lineTo(margin.left + plotWidth, margin.top + plotHeight);
+            ctx.stroke();
+            const numTicksX = 5;
+            for (let i = 0; i < numTicksX; i++) {
+                const val = factorX.min + (i / (numTicksX - 1)) * (factorX.max - factorX.min);
+                const x = margin.left + (i / (numTicksX - 1)) * plotWidth;
+                ctx.beginPath();
+                ctx.moveTo(x, margin.top + plotHeight);
+                ctx.lineTo(x, margin.top + plotHeight + 5);
+                ctx.stroke();
+                ctx.fillText(val.toFixed(2), x, margin.top + plotHeight + 15);
+            }
+            ctx.fillText(factorX.name, margin.left + plotWidth / 2, margin.top + plotHeight + 35);
+
+            // Y-axis
+            ctx.beginPath();
+            ctx.moveTo(margin.left, margin.top);
+            ctx.lineTo(margin.left, margin.top + plotHeight);
+            ctx.stroke();
+            const numTicksY = 5;
+            for (let i = 0; i < numTicksY; i++) {
+                const val = factorY.min + (i / (numTicksY - 1)) * (factorY.max - factorY.min);
+                const y = margin.top + plotHeight - (i / (numTicksY - 1)) * plotHeight;
+                ctx.beginPath();
+                ctx.moveTo(margin.left, y);
+                ctx.lineTo(margin.left - 5, y);
+                ctx.stroke();
+                ctx.textAlign = 'right';
+                ctx.fillText(val.toFixed(1), margin.left - 10, y);
+            }
+            ctx.save();
+            ctx.translate(margin.left - 45, margin.top + plotHeight / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.textAlign = 'center';
+            ctx.fillText(factorY.name, 0, 0);
+            ctx.restore();
+
+            // 4. Draw Color Scale Legend
+            const legendWidth = 15;
+            const legendX = width - margin.right + 15;
+            const legendGradient = ctx.createLinearGradient(0, margin.top + plotHeight, 0, margin.top);
+            for (let i = 0; i <= 1; i += 0.1) {
+                const color = new THREE.Color();
+                color.setHSL((240 - (i * 240)) / 360, 0.9, 0.5);
+                legendGradient.addColorStop(i, `rgb(${color.r*255}, ${color.g*255}, ${color.b*255})`);
+            }
+            ctx.fillStyle = legendGradient;
+            ctx.fillRect(legendX, margin.top, legendWidth, plotHeight);
+            ctx.strokeStyle = '#333';
+            ctx.strokeRect(legendX, margin.top, legendWidth, plotHeight);
+
+            ctx.fillStyle = '#333';
+            ctx.textAlign = 'left';
+            ctx.font = '10px Inter';
+            ctx.fillText(maxZ.toFixed(1), legendX + legendWidth + 5, margin.top);
+            ctx.fillText(minZ.toFixed(1), legendX + legendWidth + 5, margin.top + plotHeight);
+
+            // 5. Draw Optimum Marker
+            const optimumSettings = optimumResult.optimum.settings;
+            if (optimumSettings[factorX.name] !== undefined && optimumSettings[factorY.name] !== undefined) {
+                const optX = margin.left + ((optimumSettings[factorX.name] - factorX.min) / (factorX.max - factorX.min)) * plotWidth;
+                const optY = margin.top + plotHeight - (((optimumSettings[factorY.name] - factorY.min) / (factorY.max - factorY.min)) * plotHeight);
+                if (isFinite(optX) && isFinite(optY)) {
+                    ctx.font = '24px sans-serif';
+                    ctx.fillStyle = 'white';
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 2;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.strokeText('★', optX, optY);
+                    ctx.fillText('★', optX, optY);
+                }
+            }
+        }
+
+        // --- Core Math and Stat Functions (largely unchanged) ---
+        function generateFactorial(factors){const k=factors.length,numRuns=2**k,plan=[];for(let i=0;i<numRuns;i++){const settings={};for(let j=0;j<k;j++)settings[factors[j].name]=((i>>j)&1)===0?factors[j].min:factors[j].max;plan.push(settings)}return plan}
+        function generateBoxBehnken(factors){const k=factors.length;if(k<3)return null;const plan=[],centerPoint={};factors.forEach(f=>centerPoint[f.name]=(f.min+f.max)/2);for(let i=0;i<k;i++)for(let j=i+1;j<k;j++)[-1,1].forEach(li=>[-1,1].forEach(lj=>{const settings={...centerPoint};settings[factors[i].name]=li===-1?factors[i].min:factors[i].max;settings[factors[j].name]=lj===-1?factors[j].min:factors[j].max;plan.push(settings)}));for(let i=0;i<Math.max(3,Math.floor(k/2)+1);i++)plan.push(centerPoint);return plan}
+        function generateCentralComposite(factors){let plan=generateFactorial(factors);const k=factors.length;const centerPoint={};factors.forEach(f=>centerPoint[f.name]=(f.min+f.max)/2);for(let i=0;i<Math.max(3,k);i++)plan.push(centerPoint);const alpha=ccdTypeEl.value==='rotatable'?k**0.25:1;factors.forEach(f=>{plan.push({...centerPoint,[f.name]:uncodeValue(-alpha,f.min,f.max)});plan.push({...centerPoint,[f.name]:uncodeValue(alpha,f.min,f.max)})});return plan}
+        const matrix={multiply:(a,b)=>{if(!a||!b||a.length===0||b.length===0||a[0].length!==b.length)return null;return a.map((r,i)=>b[0].map((_,j)=>r.reduce((s,e,k)=>s+(e*b[k][j]),0)))},transpose:a=>a[0].map((_,i)=>a.map(r=>r[i])),invert:m=>{const n=m.length,id=m.map((_,i)=>m.map((_,j)=>i===j?1:0)),C=m.map((r,i)=>[...r,...id[i]]);for(let i=0;i<n;i++){let p=i;while(p<n&&C[p][i]===0)p++;if(p===n)return null;[C[i],C[p]]=[C[p],C[i]];let d=C[i][i];for(let j=i;j<2*n;j++)C[i][j]/=d;for(let k=0;k<n;k++)if(k!==i){let mu=C[k][i];for(let j=i;j<2*n;j++)C[k][j]-=mu*C[i][j]}}return C.map(r=>r.slice(n))},dot:(v1,v2)=>v1.reduce((s,x,i)=>s+x*v2[i],0),norm:v=>Math.sqrt(v.reduce((s,x)=>s+x*x,0))};
+        const codeValue=(realValue,min,max)=>(max===min)?0:(2*(realValue-min)/(max-min)-1);
+        const uncodeValue=(codedValue,min,max)=>min+(codedValue+1)*(max-min)/2;
+
+        function buildModel(dataPoints,factors,responseName,designType){
+            const validData=dataPoints.filter(d=>d[responseName]!==null&&factors.every(f=>d.settings[f.name]!==undefined));
+            const k=factors.length;
+            let termHeaders=['Intercept'];
+            factors.forEach(f=>termHeaders.push(f.name));
+            if(designType !== 'factorial') {
+                for(let i=0; i<k; i++) {
+                    termHeaders.push(`${factors[i].name}*${factors[i].name}`);
+                    for(let j=i+1; j<k; j++) {
+                        termHeaders.push(`${factors[i].name}*${factors[j].name}`);
+                    }
+                }
+            } else {
+                 for(let i=0; i<k; i++) for(let j=i+1; j<k; j++) termHeaders.push(`${factors[i].name}*${factors[j].name}`);
+            }
+            if(validData.length<termHeaders.length)return null;
+
+            const X=validData.map(p=>{
+                const codedSettings={};
+                factors.forEach(f=>codedSettings[f.name]=codeValue(p.settings[f.name],f.min,f.max));
+                const row = [1];
+                let termIndex = 1;
+                factors.forEach(f => row.push(codedSettings[f.name]));
+                termIndex += factors.length;
+
+                 if(designType !== 'factorial') {
+                    for(let i=0; i<k; i++) {
+                        row.push(codedSettings[factors[i].name] ** 2);
+                        for(let j=i+1; j<k; j++) {
+                             row.push(codedSettings[factors[i].name] * codedSettings[factors[j].name]);
+                        }
+                    }
+                } else {
+                     for(let i=0; i<k; i++) for(let j=i+1; j<k; j++) row.push(codedSettings[factors[i].name] * codedSettings[factors[j].name]);
+                }
+                return row;
+            });
+            let yObserved=validData.map(p=>p[responseName]);const Xt=matrix.transpose(X),XtX=matrix.multiply(Xt,X),XtX_inv=matrix.invert(XtX);if(!XtX_inv)return null;const b=matrix.multiply(XtX_inv,matrix.multiply(Xt,yObserved.map(v=>[v]))).map(c=>c[0]);const yPredicted=matrix.multiply(X,b.map(c=>[c])).map(v=>v[0]);const yMean=yObserved.reduce((a,b)=>a+b,0)/yObserved.length;const residuals=yObserved.map((y,i)=>y-yPredicted[i]);const ssError=residuals.reduce((sum,r)=>sum+r*r,0);const ssTotal=yObserved.reduce((sum,y)=>sum+(y-yMean)**2,0);const n=validData.length,p_terms=b.length;if(n-p_terms<=0)return null;const msError=ssError/(n-p_terms);const hatDiag=X.map(x_i=>matrix.dot(matrix.multiply([x_i],XtX_inv)[0],x_i));const press=residuals.reduce((sum,r,i)=>(1-hatDiag[i]>1e-9)?sum+Math.pow(r/(1-hatDiag[i]),2):sum,0);const predR2=ssTotal>0?1-(press/ssTotal):1;const stdDev=Math.sqrt(msError);const cv=yMean!==0?Math.abs((stdDev/yMean)*100):0;const yPredRange=Math.max(...yPredicted)-Math.min(...yPredicted);const adeqPrec=msError>0?yPredRange/Math.sqrt(p_terms*msError/n):Infinity;const r2=ssTotal>0?1-(ssError/ssTotal):1;const adjR2=n-p_terms-1>0?1-((1-r2)*(n-1))/(n-p_terms-1):r2;const t_critical=1.96;const coeffsWithStats={};termHeaders.forEach((key,i)=>{const c_ii=XtX_inv[i][i];const stdError=Math.sqrt(msError*c_ii);const marginOfError=t_critical*stdError;coeffsWithStats[key]={value:b[i],stdError,ciLower:b[i]-marginOfError,ciUpper:b[i]+marginOfError}});return{coeffs:coeffsWithStats,stats:{'Std. Dev.':stdDev,Mean:yMean,'C.V. %':cv,PRESS:press,'R-Squared':r2,'Adj R-Squared':adjR2,'Pred R-Squared':predR2,'Adeq. Precision':adeqPrec,msError},matrixInfo:{XtX_inv,termHeaders}}}
+
+        const predictFromModel=(model,codedSettings)=>{
+            if(!model || !model.coeffs)return NaN;
+            let y=model.coeffs['Intercept']?.value??0;
+            for(const[term,coeff]of Object.entries(model.coeffs)){
+                if(term==='Intercept')continue;
+                const factorsInTerm=term.split('*').map(t=>t.trim());
+                if(factorsInTerm.length===1) {
+                    y+=coeff.value*(codedSettings[factorsInTerm[0]]??0);
+                } else if (factorsInTerm.length===2) {
+                    if (factorsInTerm[0] === factorsInTerm[1]) {
+                        y+=coeff.value*(codedSettings[factorsInTerm[0]]??0)**2;
+                    } else {
+                        y+=coeff.value*(codedSettings[factorsInTerm[0]]??0)*(codedSettings[factorsInTerm[1]]??0);
+                    }
+                }
+            }
+            return isNaN(y)?-Infinity:y;
+        }
+
+        function getPredictionInterval(model,codedSettings){
+            const x0 = [];
+            model.matrixInfo.termHeaders.forEach(term => {
+                if(term === 'Intercept') {
+                    x0.push(1);
+                } else {
+                    const factorsInTerm = term.split('*').map(t => t.trim());
+                     if(factorsInTerm.length === 1) {
+                        x0.push(codedSettings[factorsInTerm[0]] ?? 0);
+                    } else if (factorsInTerm.length === 2) {
+                        if (factorsInTerm[0] === factorsInTerm[1]) {
+                             x0.push((codedSettings[factorsInTerm[0]] ?? 0) ** 2);
+                        } else {
+                            x0.push((codedSettings[factorsInTerm[0]] ?? 0) * (codedSettings[factorsInTerm[1]] ?? 0));
+                        }
+                    }
+                }
+            });
+            const leverage=matrix.dot(matrix.multiply([x0],model.matrixInfo.XtX_inv)[0],x0);
+            const se_pred=Math.sqrt(model.stats.msError*(1+leverage));
+            const margin=1.96*se_pred;const prediction=predictFromModel(model,codedSettings);
+            return{lower:prediction-margin,upper:prediction+margin}
+        }
+
+        function findGlobalOptimum(model, varyingFactors, responseName) {
+            if (!model) return null;
+            const predictCoded = codedSettings => predictFromModel(model, codedSettings);
+            const codedBounds = {};
+            varyingFactors.forEach(f => { codedBounds[f.name] = { min: -1, max: 1 } });
+            let bestCoded = findOptimumRandomWalk(predictCoded, codedBounds, varyingFactors);
+            let bestRealSettings = {};
+            varyingFactors.forEach(f => {
+                if (bestCoded.settings[f.name] !== undefined) bestRealSettings[f.name] = uncodeValue(bestCoded.settings[f.name], f.min, f.max)
+            });
+            let bestZ = bestCoded.z;
+
+            bestZ = Math.max(0, bestZ);
+            if (responseName === 'yield') {
+                bestZ = Math.min(100, bestZ);
+            }
+
+            return { optimum: { z: bestZ, settings: bestRealSettings } }
+        }
+
+        function findOptimumRandomWalk(predict,bounds,varyingFactors){const precision=rwPrecisionEl.value;let initialPoints,maxIterations;switch(precision){case'coarse':initialPoints=200;maxIterations=800;break;case'extensive':initialPoints=2000;maxIterations=98000;break;default:initialPoints=1000;maxIterations=9000;break}let bestSettings={},bestZ=-Infinity;for(let i=0;i<initialPoints;i++){let currentSettings={};varyingFactors.forEach(f=>{currentSettings[f.name]=bounds[f.name].min+Math.random()*(bounds[f.name].max-bounds[f.name].min)});const z=predict(currentSettings);if(z>bestZ){bestZ=z;bestSettings=currentSettings}}for(let i=0;i<maxIterations;i++){let newSettings={};const decay=1-((i/maxIterations)**2);varyingFactors.forEach(f=>{const range=(bounds[f.name].max-bounds[f.name].min)*0.2*decay;newSettings[f.name]=(bestSettings[f.name]??0)+(Math.random()-0.5)*range;newSettings[f.name]=Math.max(bounds[f.name].min,Math.min(bounds[f.name].max,newSettings[f.name]))});const z=predict(newSettings);if(z>bestZ){bestZ=z;bestSettings=newSettings}}return{z:bestZ,settings:bestSettings}}
+
+        function saveAsPDF() {
+            customAlert('Generating PDF... Please wait.');
+            setTimeout(() => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                const now = new Date();
+                const timestamp = now.toLocaleString();
+                const filenameTimestamp = now.toISOString().replace(/:/g, '-').slice(0, 19);
+                doc.setFontSize(18);
+                doc.text('CVD Experiment Analysis Report', 14, 22);
+                doc.setFontSize(11);
+                doc.text(`Generated on: ${timestamp}`, 14, 30);
+                let yPos = 40;
+                if (!predictedOptimaCard.classList.contains('hidden')) {
+                    doc.setFontSize(14);
+                    doc.text('Predicted Optimum Conditions', 14, yPos);
+                    yPos += 8;
+                    const addOptimumToPdf = (displayEl, yPosition, color) => {
+                        if (displayEl.classList.contains('hidden')) return yPosition;
+                        const title = displayEl.querySelector('h3').textContent;
+                        const bodyItems = [];
+                        displayEl.querySelectorAll('p, ul li, div > p').forEach(el => bodyItems.push([el.innerText.replace(/\s+/g, ' ')]));
+                        doc.autoTable({
+                            head: [[title]],
+                            body: bodyItems,
+                            startY: yPosition,
+                            theme: 'plain',
+                            headStyles: { fontStyle: 'bold', fillColor: color },
+                            styles: { cellPadding: 1.5, fontSize: 9 }
+                        });
+                        return doc.lastAutoTable.finalY + 4;
+                    };
+                    yPos = addOptimumToPdf(predictedThicknessDisplay, yPos, [232, 245, 233]);
+                    yPos = addOptimumToPdf(predictedYieldDisplay, yPos, [227, 242, 253]);
+                    yPos = addOptimumToPdf(predictedCombinedDisplay, yPos, [237, 233, 251]);
+                }
+                if (yPos > 250) { doc.addPage(); yPos = 22; }
+                doc.setFontSize(14);
+                doc.text('Experiment Data Table', 14, yPos);
+                const dataTableHead = [[...tableHead.querySelectorAll('th')].map(th => th.textContent)];
+                const factorKeys = definedFactors.map(f => f.name);
+                const dataTableBody = experimentData.map(exp => [
+                    exp.id,
+                    ...factorKeys.map(key => exp.settings[key]?.toFixed(3) ?? '-'),
+                    exp.thickness?.toFixed(1) ?? '-',
+                    exp.yield?.toFixed(1) ?? '-',
+                    exp.score?.toFixed(3) ?? '-'
+                ]);
+                doc.autoTable({ head: dataTableHead, body: dataTableBody, startY: yPos + 4, headStyles: { fillColor: [22, 163, 74] }, styles: { fontSize: 6, cellPadding: 1.5 }});
+                let lastY = doc.lastAutoTable.finalY + 10;
+                document.querySelectorAll('#statistics-container .card').forEach((card, i) => {
+                    if (lastY > 190 && i > 0) { doc.addPage(); lastY = 20; }
+                    const title = card.querySelector('h2').textContent;
+                    doc.setFontSize(14);
+                    doc.text(title, 14, lastY);
+                    lastY += 6;
+                    card.querySelectorAll('p').forEach(p => {
+                        doc.setFontSize(8).text(p.innerText, 14, lastY);
+                        lastY += 4;
+                    });
+                    doc.autoTable({ html: card.querySelector('.coefficients-table'), startY: lastY, theme: 'grid', styles: { cellPadding: 1, fontSize: 8 }});
+                    lastY = doc.lastAutoTable.finalY + 4;
+                    doc.autoTable({ html: card.querySelector('.fit-statistics-table'), startY: lastY, theme: 'plain', styles: { cellPadding: 1, fontSize: 8 }});
+                    lastY = doc.lastAutoTable.finalY + 10;
+                });
+                const allCanvases = document.querySelectorAll('#contour-plots-container canvas');
+                let imgHeight = 0;
+                if (allCanvases.length > 0) {
+                     if (lastY > 30) { doc.addPage(); lastY = 20; }
+                     doc.setFontSize(14); doc.text('2D Contour Plots', 14, lastY); lastY += 8;
+                    document.querySelectorAll('#contour-plots-container > div').forEach((pairWrapper) => {
+                        const pairTitle = pairWrapper.querySelector('h3');
+                        if (pairTitle) {
+                            if (lastY > 250) { doc.addPage(); lastY = 20; }
+                            doc.setFontSize(12).text(pairTitle.textContent, 105, lastY, { align: 'center' });
+                            lastY += 8;
+                        }
+                        let plotX = 14;
+                        pairWrapper.querySelectorAll('.grid > div').forEach((plotDiv, plotIndex) => {
+                             const canvas = plotDiv.querySelector('canvas');
+                             const title = plotDiv.querySelector('h4');
+                             if (!canvas || !title) return;
+                             const imgData = canvas.toDataURL('image/png');
+                             const imgWidth = 80;
+                             imgHeight = canvas.height * (imgWidth / canvas.width);
+                             if (plotX + imgWidth > doc.internal.pageSize.width - 14) {
+                                lastY += imgHeight + 15;
+                                plotX = 14;
+                             }
+                             if (lastY + imgHeight + 20 > doc.internal.pageSize.height) { doc.addPage(); lastY = 20; }
+                             doc.setFontSize(10).text(title.textContent, plotX + (imgWidth / 2), lastY, { align: 'center' });
+                             doc.addImage(imgData, 'PNG', plotX, lastY + 4, imgWidth, imgHeight);
+                             plotX += imgWidth + 10;
+                        });
+                        lastY += imgHeight + 15;
+                    });
+                }
+                doc.save(`cvd_report_${filenameTimestamp}.pdf`);
+                alertClose.click();
+            }, 500);
+        }
+
+        window.onload = () => {
+            setupFactorInputs();
+            ccdTypeContainer.style.display = 'block';
+        };
+    </script>
+</body>
+</html>
